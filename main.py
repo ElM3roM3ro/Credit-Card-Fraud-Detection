@@ -40,6 +40,53 @@ def predict_fraud(data, model, scaler):
     return model.predict(model_input)
 
 
+def predict_from_csv(csv_path, model_path='models/random_forest_fraud_model.pkl', scaler_path='models/scaler.pkl'):
+    """
+    Load a CSV of credit card transactions and predict fraud.
+
+    Parameters:
+    - csv_path: path to the CSV file
+    - model_path: path to the saved model (.pkl)
+    - scaler_path: path to the saved StandardScaler (.pkl)
+
+    Returns:
+    - DataFrame with predictions in a 'Predicted_Class' column
+    """
+    # Load model and scaler
+    model = joblib.load(model_path)
+    scaler = joblib.load(scaler_path)
+
+    # Load CSV
+    df = pd.read_csv(csv_path)
+
+    # Check if 'Amount' is present
+    if 'Amount' not in df.columns:
+        raise ValueError("CSV must contain an 'Amount' column.")
+
+    # Scale 'Amount' column and rename to match training
+    df['scaled_amount'] = scaler.transform(df[['Amount']])
+    df = df.drop(columns=['Amount'], errors='ignore')
+
+    # Drop other unnecessary columns (like 'Time', 'Class', or 'id' if present)
+    for col in ['Time', 'Class', 'id']:
+        if col in df.columns:
+            df = df.drop(columns=[col])
+
+    # Ensure feature order is correct: V1–V28 + scaled_amount
+    expected_features = [f'V{i}' for i in range(1, 29)] + ['scaled_amount']
+    if not all(col in df.columns for col in expected_features):
+        raise ValueError("Missing one or more V1–V28 or 'scaled_amount' columns.")
+
+    df = df[expected_features]
+
+    # Predict
+    predictions = model.predict(df)
+    df['Predicted_Class'] = predictions
+
+    return df
+
+
+
 
 def main():
     #model1 takes approximatley 5 mins to train.
@@ -91,6 +138,12 @@ def main():
 
     result4 = predict_fraud(legit_transaction,model2,scaler)
     print("Model 2 Prediction with Legit transaction: ", "FRAUD" if result4[0] == 1 else "LEGIT") 
+
+
+    results = predict_from_csv("data/creditcard_2023.csv")
+    print(results.head())
+    print(results[['Predicted_Class']].value_counts())  # Summary of predictions
+    results.to_csv("predicted_output.csv", index=False)
 
 
 
